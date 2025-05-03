@@ -125,7 +125,7 @@ data$pron <- data$pron / data$lengthw
 Artículos
 
 ```{r}
-data$art <- sapply(texts, function(x) str_count(x, pattern = "\\b(el|la|lo|los|las|un|una|unos|unas)\\b"))
+data$art <- sapply(texts, function(x) str_count(x, pattern = "\\b(el|la|lo|los|las)\\b"))
 data$art <- data$art / data$lengthw
 ```
 
@@ -146,7 +146,7 @@ data$voc <- data$voc / data$lengthw
 Lenguaje formal
 
 ```{r}
-data$form <- sapply(texts, function(x) str_count(x, pattern = "(chulo|guay|flipante|currar|joder|pasta|mogollón|montón|pasar de|colega|tío|tía|peña|dar la lata|molar|flipear|chungo|pirarse|cotilleo|cotillear|liarla|rayarse|tronco|vale|venga|ser la caña|ser un rollo|estar petado|estar forrado|darle caña|estar en las nubes|tirar la toalla|no tener ni idea|estar hasta las narices|estar hasta el moño|ser un pringado|ser un crack|estar en la parra|a tope|anda ya|menuda faena|qué marrón|qué faena|qué putada|qué pasada|qué flipante|qué cutre|qué pijo|qué majo|qué borde|qué mal rollo|qué buen rollo|qué coñazo|qué chapuza|qué movida|qué palo|qué chorrada|qué rollazo|qué flipe|qué hostia|qué leche|dar la brasa|tener mala leche|irse de farra|irse de marcha|irse de jarana|ser un plasta|ser un manta|ser un chapuzas|ser un bocazas|ser un sobrado|ser un caradura|ser un chorizo|ser un cutre|estar hecho polvo|estar frito|estar muerto de risa|estar más pallá que pacá|echar un cable|echar un capote|dar el coñazo|dar por saco|dar la brasa|dar el cante|dar el pego|dar mal rollo|estar al loro|estar a dos velas|no comerse un rosco|irse de picos pardos|ponerse las pilas|irse al garete|irse de madre|irse a tomar viento|meter la pata|quedarse en bragas|quedarse frito|quedarse de piedra|hacer la pelota|irse de vareta|tener morro|tener un morro que se lo pisa|tirarse el pisto|hacerse el sueco|irse por los cerros de Úbeda|partirse la caja|partirse el culo|estar empanao|hacerse la picha un lío)\\b"))
+data$form <- sapply(texts, function(x) str_count(x, pattern = "(vale|flipante|pasta|pues|colega|vaya|tío|tía|chaval|mola|molar|guay|genial|flipar|currar|peli|profe|cole|peña|curro|movida|pasada|chungo|majete|boli|bici|colega|peque|tardeo|birra|finde|cutre|selfi)\\b"))
 
 data$form <- data$form / data$lengthw
 
@@ -156,7 +156,7 @@ data$form <- data$form / data$lengthw
 Lenguaje agresivo
 
 ```{r}
-palabras <- c("gilipollas", "cabrón", "hijo de puta", "mierda", "joder", "cojones", "puta", "puto", "cabronazo", "imbécil", "subnormal", "tarado", "idiota", "estúpido", "tonto", "payaso", "pringado", "capullo", "zorra", "perra", "baboso", "cerdo", "asqueroso", "desgraciado", "mierdoso", "hostia", "leches", "vete a la mierda", "me cago en", "qué asco", "qué cojones", "de mierda", "tocapelotas", "pesado", "bocazas", "chupapollas", "cagón", "mamarracho", "cállate", "cállate la boca", "te reviento", "te parto la cara", "te meto una hostia", "me tienes harto", "eres un inútil", "no vales para nada", "das pena", "das asco", "maldito", "malnacido")
+palabras <- c("odio", "ataque", "atacar", "ira", "rabia", "violencia", "agresión", "guerra", "hostil", "amenaza", "insulto", "pelea", "venganza", "furia", "destruir", "brutal", "golpe", "sangre", "matar", "asesinar")
 
 contar_palabras <- function(texto) {
   contadores <- sapply(palabras, function(palabra) str_count(texto, pattern = paste0("\\b", palabra, "\\b")))
