@@ -1,12 +1,11 @@
----
 title: "Variables"
 author: "Fernando González"
 date:
 output:
-  pdf_document: default
-  word_document: default
-  html_document: default
----
+pdf\_document: default
+word\_document: default
+html\_document: default
+-----------------------
 
 database
 
@@ -15,15 +14,8 @@ library(readxl)
 library(dplyr)
 data <- read_excel("C:/Users/Fer/Desktop/TFG_main/Variables.xlsx", sheet = "Full 4") %>%
   mutate_if(is.character, as.factor) %>%
-  mutate(outcome = as.factor(outcome))
-``` 
-
-```{r}
-# library(readxl)
-
-# data <- read_excel("C:/Users/Fer/Desktop/TFG_main/Variables.xlsx", sheet = "Full 4") %>%
-#  mutate_if(is.character, as.factor)
-``` 
+  mutate(origen = as.factor(origen))
+```
 
 packages
 
@@ -31,6 +23,9 @@ packages
 library(lintr)
 library(syuzhet)
 library(quanteda)
+library(quanteda.textstats)
+library(koRpus)
+library(koRpus.lang.es)
 library(stringr)
 library(tidyr)
 library(tm)
@@ -53,49 +48,78 @@ texts <- Corpus(DirSource("C:/Users/Fer/Desktop/TFG_main/txt"))
 texts <- tm_map(texts, content_transformer(as.character))
 ```
 
-----------------------------------------------------------------------------------------------------------------------------
+---
 
-Longitud
+Número de oraciones
 
 ```{r}
-data$lengthl <- sapply(texts, function(x) nchar(x))  
+data$nstc <- sapply(texts, function(x) nsentence(x)) 
+```
+
+Longitud de texto en palabras
+
+```{r}
 data$lengthw <- sapply(texts, function(x) str_count(x, boundary("word")))
+```
+
+Signos_exp
+
+```{r}
+data$signos_exp <- sapply(texts, function(x) {
+  str_count(x, pattern = "[?!]")
+})
+
+data$signos_exp <- data$signos_exp / data$nstc
+```
+
+Número de párrafos
+
+```{r}
+data$pgf <- sapply(texts, function(x) {
+  str_count(x, "\n") + 1
+})
+```
+
+Enumeraciones
+
+```{r}
+data$enumeraciones <- sapply(texts, function(x) {
+  
+  count_numeros <- str_count(x, "(?m)^[0-9]+\\.")
+  
+  count_guiones <- str_count(x, "(?m)^\\-")
+  
+  count_numeros + count_guiones
+})
+
+data$enum <- data$enumeraciones / data$pgf
+```
+
+
+Pone todo el minúsculas y elimina los signos de puntuación
+
+```{r}
+texts <- tm_map(texts, content_transformer(tolower))
+texts <- tm_map(texts, removePunctuation)
+```
+
+Longitudes de texto en caracteres y longitud media de palabra
+
+```{r}
+data$lengthl <- sapply(texts, function(x) nchar(x))
 data$wordl <- data$lengthl / data$lengthw
 ```
 
-ENUMERACIONES (números y guiones)
+Análisis de sentimientos en castellano
 
 ```{r}
-# Crear la variable "enumeraciones": suma del conteo de dígitos y guiones en cada texto
-data$enumeraciones <- sapply(texts, function(x) {
-  count_digits <- str_count(x, pattern = "[0-9]")
-  count_guiones <- str_count(x, pattern = "-")
-  count_digits + count_guiones
-})
-
-# Opcional: Normalizar el conteo dividiéndolo por el número total de palabras
-data$enumeraciones_norm <- data$enumeraciones / data$lengthw
+txt_vec <- iconv(txt_vec, to = "UTF-8")
+sent_nrc_all <- get_nrc_sentiment(txt_vec, language = "spanish")
+data$sentval <- sent_nrc_all$positive - sent_nrc_all$negative
+data$sentm <- data$sentval / rowSums(sent_nrc_all)
 ```
 
-
-Análisis de sentimientos
-
-```{r}
-
-# Convertir corpus a vector de caracteres para poder hacer mi análisis de sentimientos
-txt_vec <- sapply(texts, as.character)
-
-
-sa <- analyzeSentiment(txt_vec, language = "spanish")
-
-data$sent_LM   <- sa$SentimentLM
-data$sent_GI   <- sa$SentimentGI
-data$sent_mean <- rowMeans(sa[, c("SentimentLM", "SentimentGI")], na.rm = TRUE)
-data$sent_sd   <- apply(sa[, c("SentimentLM", "SentimentGI")], 1, sd, na.rm = TRUE)
-```
-
-
-Patrones de repetición (max frecuencia rep)
+Patrones de repetición
 
 ```{r}
 data$patt <- sapply(texts, function(x) {
@@ -113,7 +137,6 @@ data <- data %>%
   mutate(pattw = as.factor(pattw))
 ```
 
-
 Pronombres personales
 
 ```{r}
@@ -121,14 +144,12 @@ data$pron <- sapply(texts, function(x) str_count(x, pattern = "\\b(yo|tú|vos|us
 data$pron <- data$pron / data$lengthw
 ```
 
-
 Artículos
 
 ```{r}
 data$art <- sapply(texts, function(x) str_count(x, pattern = "\\b(el|la|lo|los|las)\\b"))
 data$art <- data$art / data$lengthw
 ```
-
 
 Variedad léxica
 
@@ -142,21 +163,23 @@ data$voc <- sapply(texts, function(x) {
 data$voc <- data$voc / data$lengthw
 ```
 
-
-Lenguaje formal
+Lenguaje informal
 
 ```{r}
-data$form <- sapply(texts, function(x) str_count(x, pattern = "(vale|flipante|pasta|pues|colega|vaya|tío|tía|chaval|mola|molar|guay|genial|flipar|currar|peli|profe|cole|peña|curro|movida|pasada|chungo|majete|boli|bici|colega|peque|tardeo|birra|finde|cutre|selfi)\\b"))
+data$form <- sapply(texts, function(x) str_count(tolower(x),pattern = 
+"(un montón de|de todas formas|en fin|en resumen|para resumir|al final|ponerse en contacto|irse|venirse abajo|dar lugar|salir adelante|dar pena|dar igual|dar lo mismo|irse de madre|estar en la parra|meter la pata|largarse|liarse|quedarse|ponerse a|buscar|mirar|investigar|parecerse|entender|probar|esperar a|hablar de|pensar en|pensar sobre|tirar|desechar|llamar|organizar|montar|soportar|aguantar|conformarse|sacar|quitar|llevarse|empezar|mostrar|referirse a|indicar|preguntar|decir|comprar|doler|hacer daño|revisar|comprobar|flipar|flipando|currar|currando|ligar|molaba|molar|molando|fardar|pillar|pasarlo bien|peli|pelis|profe|profes|cole|coles|chaval|chavales|tía|tío|tías|tíos|colega|colegas|curro|curros|movida|movidas|peña|birra|birras|finde|findes|bici|bicis|boli|bolis|cutre|cutres|pastón|pasta|selfi|selfies|bueno|pues|vale|ok|oye|eh|vamos|nada|entonces|en plan|o sea|a ver|ya ves|es que|yo creo que|¿sabes?|básicamente|total|en serio|ni de coña|también|además|gracias|mil gracias|de nada|lo siento|perdona|perdón|súper|genial|guay|horrible|increíble|flipante|feo|bonito|chulo|majete|divertido|aburrido|fácil|difícil|complicado|pesado|barato|peor|gratis|claro|entero)\\b"
+))
 
 data$form <- data$form / data$lengthw
 
 ```
 
-
 Lenguaje agresivo
 
 ```{r}
-palabras <- c("odio", "ataque", "atacar", "ira", "rabia", "violencia", "agresión", "guerra", "hostil", "amenaza", "insulto", "pelea", "venganza", "furia", "destruir", "brutal", "golpe", "sangre", "matar", "asesinar")
+palabras <- c(
+  "odio", "odiar", "ira", "rabia", "rencor", "venganza", "enemigo", "enemistad", "agresión", "agredir", "violencia", "violento", "violenta", "brutal", "brutalidad", "golpe", "golpear", "hostilidad", "hostil", "ataque", "atacar", "lucha", "pelea", "conflicto", "confrontación", "represalia", "desprecio", "despreciar", "crimen", "criminal", "asesinar", "asesinato", "matar", "muerto", "homicidio", "liquidar", "fusilar", "apuñalar", "apuñalamiento", "disparar", "disparo", "tiroteo", "masacre", "masacrar", "exterminar", "aniquilar", "torturar", "tortura", "castigar", "castigo", "reprimir", "represión", "linchar", "ejecutar", "decapitar", "degollar", "ahorcar", "estrangular", "enfrentar", "derribar", "derrocar", "bombardear", "bombardeo", "bomba", "explosión", "explosivo", "armamento", "armas", "arma", "invadir", "invasión", "expulsar", "expulsión", "vulnerar", "intimidar", "amenazar", "amenaza", "terror", "terrorismo", "terrorista", "horror", "miedo", "pánico", "sangre", "sanguinario", "violador", "ultrajar", "abusar", "abuso", "humillar", "humillación", "maltrato", "maltratar", "dominar", "imponer", "esclavizar", "oprimir", "opresión", "destruir", "destrucción", "colapsar", "silenciar", "gritar", "grito", "apuñalado", "violada", "vengarse", "vengativo", "resistencia", "subversivo", "subversión", "milicia", "militar", "cruel", "crueldad", "agresivo", "agresividad", "injusticia", "odio racial", "racismo", "xenofobia", "golpista", "dictador", "dictadura", "antidemocrático", "autoritarismo", "violencia de género", "machismo", "feminicidio", "escarmentar", "salvajismo", "bestialidad", "barbarie", "repudiar", "reprochar", "escupir", "expulsado", "persecución", "hostigar", "acosar", "acoso", "asediar", "asedio", "bloquear", "bloqueo", "radical", "fanático", "fundamentalista", "odio religioso", "quemar", "incendiar", "linchamiento", "injusto", "vengador", "vengativa", "arma blanca", "arma de fuego", "violador serial", "estrangularon", "ahorcado", "masacraron", "matanza", "golpeó", "herida", "heridas", "tiros", "tiro", "bala", "balas", "ametrallar", "ametralladora", "bomba casera", "bomba nuclear", "bomba atómica", "violencia política", "discriminación", "desprecio social", "odio de clase", "conflicto armado", "intervenir", "intervención", "destrozar", "desfigurar", "caos", "anarquía", "infierno", "batalla", "combate", "rifle", "pistola", "cuchillo", "arma letal", "arma mortal")
+
 
 contar_palabras <- function(texto) {
   contadores <- sapply(palabras, function(palabra) str_count(texto, pattern = paste0("\\b", palabra, "\\b")))
@@ -169,19 +192,22 @@ data$aggr <- aggr
 data$aggr <- data$aggr / data$lengthw
 ```
 
-Número de párrafos
-                     
-```{r}
-data$pgf <- sapply(texts, function(x) {
-  str_count(x, "\n") + 1
-})
-```
-
-
-Número de oraciones
+Conectores
 
 ```{r}
-data$nstc <- sapply(texts, function(x) nsentence(x)) 
+
+conectores <- c(
+"sin embargo", "no obstante", "por lo tanto", "por consiguiente", "aun así", "en cambio", "además", "asimismo", "por otra parte", "por otro lado", "de hecho", "es decir", "o sea", "en efecto", "en síntesis", "en resumen", "por ende", "en consecuencia", "finalmente", "para concluir", "para empezar", "en primer lugar", "en segundo lugar", "mientras tanto", "a continuación", "por último", "ante todo", "sobre todo", "sin duda", "ciertamente", "aunque", "a pesar de", "puesto que", "ya que", "porque", "dado que")
+
+patron <- paste0("\\b(", paste(conectores, collapse = "|"), ")\\b")
+
+data$conectores_count <- str_count(
+  txt_vec,
+  regex(patron, ignore_case = TRUE)
+)
+
+data$conectores <- data$conectores_count / data$lengthw
+
 ```
 
 
@@ -191,13 +217,11 @@ Promedio de palabras por oración.
 data$avw <- data$lengthw / data$nstc
 ```
 
-
 Promedio de oraciones por párrafo.
 
 ```{r}
 data$spgf <- data$nstc / data$pgf
 ```
-
 
 Promedio de palabras por párrafo.
 
@@ -205,20 +229,17 @@ Promedio de palabras por párrafo.
 data$wpgf <- data$lengthw / data$pgf
 ```
 
-
 Proporción de oraciones respecto al número total de palabras
 
 ```{r}
 data$nstcw <- data$nstc / data$lengthw
 ```
 
-
 Proporción de párrafos respecto al número total de palabras
 
 ```{r}
 data$pgfw <- data$pgf / data$lengthw
 ```
-
 
 Variabilidad de la frecuencia
 
@@ -229,7 +250,6 @@ data$freqv <- sapply(texts, function(x) {
   sd(freq)
 })
 ```
-
 
 Relación entre palabras únicas y el total
 
@@ -242,7 +262,6 @@ data$typew <- sapply(texts, function(x) {
 })
 ```
 
-
 Suma de palabras repetidas
 
 ```{r}
@@ -254,18 +273,75 @@ data$sumrep <- sapply(texts, function(x) {
 data$sumrep <- data$sumrep / data$lengthw
 ```
 
-Y
+Que
 
 ```{r}
-data$y <- sapply(texts, function(x) str_count(x, pattern = "\\b(y)\\b"))
-data$y <- data$y / data$lengthw
+data$que <- sapply(texts, function(x) str_count(x, pattern = "\\b(que)\\b"))
+data$que <- data$que / data$lengthw
 ```
 
-El
+La
 
 ```{r}
-data$articulos <- sapply(texts, function(x) str_count(x, pattern = "\\b(el|la|los|las)\\b"))
-data$articulos <- data$articulos / data$lengthw
+data$la <- sapply(texts, function(x) str_count(x, pattern = "\\b(la)\\b"))
+data$la <- data$la / data$lengthw
+```
+
+FleschSzigriszt
+
+```{r}
+data$silabas <- data$lengthw * 1.69
+
+data$flesch <- 206.835 - 62.3 * (data$silabas / data$lengthw) - (data$lengthw / data$nstc)
+```
+
+POS
+
+```{r}
+ud_model <- udpipe_download_model(language = "spanish")
+
+ud_model <- udpipe_load_model(ud_model$file_model)
+
+anno <- udpipe_annotate(ud_model, x = txt_vec, doc_id = seq_along(txt_vec))
+anno_df <- as.data.frame(anno)
+
+total_tokens <- anno_df %>%
+  group_by(doc_id) %>%
+  summarise(total = n())
+
+upos_counts <- anno_df %>%
+  filter(upos %in% c("NOUN", "VERB", "ADJ", "ADV")) %>%
+  group_by(doc_id, upos) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  pivot_wider(names_from = upos, values_from = count, values_fill = 0)
+
+# Aquí pillo las proporciones
+upos_props <- left_join(upos_counts, total_tokens, by = "doc_id") %>%
+  mutate(
+    NOUN_prop = NOUN / total,
+    VERB_prop = VERB / total,
+    ADJ_prop  = ADJ  / total,
+    ADV_prop  = ADV  / total
+  ) %>%
+  select(doc_id, NOUN_prop, VERB_prop, ADJ_prop, ADV_prop)
+
+data$doc_id <- seq_len(nrow(data))
+upos_props$doc_id <- as.integer(upos_props$doc_id)
+
+data <- left_join(data, upos_props, by = "doc_id")
+
+data <- select(data, -doc_id)
+
+boxplot(data$NOUN_prop ~ data$origen, main = "Sustantivos (%)")
+boxplot(data$VERB_prop ~ data$origen, main = "Verbos (%)")
+boxplot(data$ADJ_prop ~ data$origen, main = "Adjetivos (%)")
+boxplot(data$ADV_prop ~ data$origen, main = "Adverbios (%)")
+
+# Test
+t.test(data$NOUN_prop ~ data$origen)
+t.test(data$VERB_prop ~ data$origen)
+t.test(data$ADJ_prop ~ data$origen)
+t.test(data$ADV_prop ~ data$origen)
 ```
 
 **EDA**
@@ -275,47 +351,29 @@ data$articulos <- data$articulos / data$lengthw
 *Origen*
 
 ```{r}
-table_outcome <- table(data$outcome)
-prop_outcome <- prop.table(table_outcome)
-prop_outcome
+table_origen <- table(data$origen)
+prop_origen <- prop.table(table_origen)
+prop_origen
 ```
 
 ```{r}
-ggplot(data, aes(x=outcome)) + 
+ggplot(data, aes(x=origen)) + 
   geom_bar(fill= c("#4DAF4A", "#00CED1")) + 
-  xlab("Outcome") + 
+  xlab("origen") + 
   ylab("Frecuencia") + 
   ggtitle("Textos: Humano (0) o Inteligencia Artificial (1)")
 ```
 
-*Tipo*
+*Categoría*
 
 ```{r}
-table_type <- table(data$type)
-prop_type <- prop.table(table_type)
-prop_type
+table_categoria <- table(data$categoria)
+prop_categoria <- prop.table(table_categoria)
+prop_categoria
 ```
 
 ```{r}
-ggplot(data, aes(x=type, fill=type)) + 
-  geom_bar() + 
-  xlab("Tipo") + 
-  ylab("Frecuencia") + 
-  ggtitle("Tipología de los textos") +
-  scale_fill_brewer(palette = "Set2") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none")
-```
-
-*Clase*
-
-```{r}
-table_typo <- table(data$typo)
-prop_typo <- prop.table(table_typo)
-prop_typo
-```
-
-```{r}
-ggplot(data, aes(x=typo, fill=typo)) + 
+ggplot(data, aes(x=categoria, fill=categoria)) + 
   geom_bar() + 
   xlab("Clase") + 
   ylab("Número") + 
@@ -327,13 +385,13 @@ ggplot(data, aes(x=typo, fill=typo)) +
 *Año*
 
 ```{r}
-table_year <- table(data$year)
-prop_year <- prop.table(table_year)
-prop_year
+table_anio <- table(data$anio)
+prop_anio <- prop.table(table_anio)
+prop_anio
 ```
 
 ```{r}
-ggplot(data, aes(x=year)) +
+ggplot(data, aes(x=anio)) +
 geom_bar(fill="#7570B3") +
 xlab("Año") +
 ylab("Número") +
@@ -354,7 +412,7 @@ data$pattw <- factor(data$pattw, levels = names(sort(table(data$pattw), decreasi
 ggplot(data, aes(x=pattw)) + 
   geom_bar(fill="#7570B3") + 
   xlab("Palabra") + 
-  ylab("Número") + 
+  ylab("Número de textos") + 
   ggtitle("Palabras utilizadas con más frecuencia en los textos") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
@@ -362,7 +420,7 @@ ggplot(data, aes(x=pattw)) +
 **Numeric variables**
 
 ```{r}
-nombres <- c("lengthl", "lengthw", "pgf", "nstc", "wordl", "sent_mean", "sent_sd", "patt", "pron", "art", "voc", "form", "aggr", "avw", "spgf", "wpgf", "nstcw", "pgfw", "freqv", "typew", "sumrep")
+nombres <- c("lengthl", "lengthw", "pgf", "nstc", "wordl", "sentm", "sentval", "patt", "pron", "art", "voc", "form", "aggr", "avw", "spgf", "wpgf", "nstcw", "pgfw", "freqv", "typew", "sumrep")
 
 par(mfrow = c(5, 5), mar = c(2, 2, 1, 1), oma = c(0, 0, 2, 0), las = 1, cex.axis = 0.7, cex.main = 0.8, cex.lab = 0.7, ps = 8)
 
@@ -375,7 +433,7 @@ for (i in 1:20) {
 mtext("Boxplots", outer = TRUE, cex = 1.5)
 ```
 
-*Lengthl* 
+*Lengthl*
 
 ```{r}
 summary(data$lengthl)
@@ -453,46 +511,43 @@ boxplot(data$wordl)
 *Enum*
 
 ```{r}
-summary(data$enumeraciones_norm)
+summary(data$enum)
 ```
 
 ```{r}
-sd(data$enumeraciones_norm)
+sd(data$enum)
 ```
 
 ```{r}
-boxplot(data$enumeraciones_norm)
-# denum <- density(data$enumeraciones_norm)
+boxplot(data$enum)
 ```
 
-*Sent_mean*
+*sentm*
 
 ```{r}
-summary(data$sent_mean)
-```
-
-```{r}
-sd(data$sent_mean)
+summary(data$sentm)
 ```
 
 ```{r}
-boxplot(data$sent_mean)
-# dsentm <- density(data$sentm)
-```
-
-*Sentsd*
-
-```{r}
-summary(data$sent_sd)
+sd(data$sentm)
 ```
 
 ```{r}
-sd(data$sent_sd)
+boxplot(data$sentm)
+```
+
+*Sentval*
+
+```{r}
+summary(data$sentval)
 ```
 
 ```{r}
-boxplot(data$sent_sd)
-# dsentsd <- density(data$sentsd)
+sd(data$sentval)
+```
+
+```{r}
+boxplot(data$sentval)
 ```
 
 *Patt*
@@ -522,7 +577,6 @@ sd(data$pron)
 
 ```{r}
 boxplot(data$pron)
-# dpron <- density(data$pron)
 ```
 
 *Art*
@@ -537,7 +591,6 @@ sd(data$art)
 
 ```{r}
 boxplot(data$art)
-# dart <- density(data$art)
 ```
 
 *Voc*
@@ -552,7 +605,6 @@ sd(data$voc)
 
 ```{r}
 boxplot(data$voc)
-# dvoc <- density(data$voc)
 ```
 
 *Form*
@@ -567,7 +619,6 @@ sd(data$form)
 
 ```{r}
 boxplot(data$form)
-# dform <- density(data$form)
 ```
 
 *Aggr*
@@ -582,7 +633,20 @@ sd(data$aggr)
 
 ```{r}
 boxplot(data$aggr)
-# daggr <- density(data$aggr)
+```
+
+*Conectores*
+
+```{r}
+summary(data$conectores)
+```
+
+```{r}
+sd(data$conectores)
+```
+
+```{r}
+boxplot(data$conectores)
 ```
 
 *Avw*
@@ -597,7 +661,6 @@ sd(data$avw)
 
 ```{r}
 boxplot(data$avw)
-# davw <- density(data$avw)
 ```
 
 *Spgf*
@@ -612,7 +675,6 @@ sd(data$spgf)
 
 ```{r}
 boxplot(data$spgf)
-# dspgf <- density(data$spgf)
 ```
 
 *Wpgf*
@@ -627,7 +689,6 @@ sd(data$wpgf)
 
 ```{r}
 boxplot(data$wpgf)
-# dwpgf <- density(data$wpgf)
 ```
 
 *Nstcw*
@@ -642,7 +703,6 @@ sd(data$nstcw)
 
 ```{r}
 boxplot(data$nstcw)
-# dnstcw <- density(data$nstcw)
 ```
 
 *Pgfw*
@@ -657,7 +717,6 @@ sd(data$pgfw)
 
 ```{r}
 boxplot(data$pgfw)
-# dpgfw <- density(data$pgfw)
 ```
 
 *Freqv*
@@ -672,7 +731,6 @@ sd(data$freqv)
 
 ```{r}
 boxplot(data$freqv)
-# dfreqv <- density(data$freqv)
 ```
 
 *Typew*
@@ -687,7 +745,6 @@ sd(data$typew)
 
 ```{r}
 boxplot(data$typew)
-# dtypew <- density(data$typew)
 ```
 
 *Sumrep*
@@ -702,79 +759,87 @@ sd(data$sumrep)
 
 ```{r}
 boxplot(data$sumrep)
-# dsumrep <- density(data$sumrep)
 ```
 
-*y*
+*signos_exp*
 
 ```{r}
-summary(data$y)
-```
-
-```{r}
-sd(data$y)
+summary(data$signos_exp)
 ```
 
 ```{r}
-boxplot(data$y)
-# dsumrep <- density(data$sumrep)
-```
-
-*The*
-
-```{r}
-summary(data$articulos)
+sd(data$signos_exp)
 ```
 
 ```{r}
-sd(data$articulos)
+boxplot(data$signos_exp)
+```
+
+*que*
+
+```{r}
+summary(data$que)
 ```
 
 ```{r}
-boxplot(data$articulos)
-# dsumrep <- density(data$sumrep)
-```
-
-**Outcome and Categorical Variables**
-
-*Outcome & Type*
-
-```{r}
-out_type <- table(data$type, data$outcome)
-prop.table(out_type)
-type_chi <- chisq.test(out_type, correct = FALSE)
-print(type_chi)
+sd(data$que)
 ```
 
 ```{r}
-ggplot(data, aes(x = as.factor(outcome), fill = type)) + 
+boxplot(data$que)
+```
+
+*La*
+
+```{r}
+summary(data$la)
+```
+
+```{r}
+sd(data$la)
+```
+
+```{r}
+boxplot(data$la)
+```
+
+*FleschSzigriszt*
+
+```{r}
+summary(data$flesch)
+```
+
+```{r}
+sd(data$flesch)
+```
+
+```{r}
+boxplot(data$flesch)
+```
+
+**origen and Categorical Variables**
+
+*origen & anio*
+
+```{r}
+out_anio <- table(data$anio, data$origen)
+prop.table(out_anio)
+anio_chi <- chisq.test(out_anio, correct = FALSE, simulate.p.value = TRUE)
+print(anio_chi)
+```
+
+```{r}
+ggplot(data, aes(x = as.factor(origen), fill = as.factor(anio))) + 
   geom_bar(position = "stack")
 
-ggplot(data, aes(x = as.factor(outcome), fill = type)) + 
+ggplot(data, aes(x = as.factor(origen), fill = as.factor(anio))) + 
   geom_bar(position = "dodge")
 ```
 
-*Outcome & Year*
+*origen & Pattw*
 
 ```{r}
-out_year <- table(data$year, data$outcome)
-prop.table(out_year)
-year_chi <- chisq.test(out_year, correct = FALSE, simulate.p.value = TRUE)
-print(year_chi)
-```
-
-```{r}
-ggplot(data, aes(x = as.factor(outcome), fill = as.factor(year))) + 
-  geom_bar(position = "stack")
-
-ggplot(data, aes(x = as.factor(outcome), fill = as.factor(year))) + 
-  geom_bar(position = "dodge")
-```
-
-*Outcome & Pattw*
-
-```{r}
-out_pattw <- table(data$pattw, data$outcome)
+out_pattw <- table(data$pattw, data$origen)
 prop.table(out_pattw)
 pattw_chi <- chisq.test(out_pattw, correct = FALSE, simulate.p.value = TRUE)
 print(pattw_chi)
@@ -794,312 +859,328 @@ top_words <- data %>%
 data_filtered <- data %>% 
   filter(pattw %in% top_words)
 
-ggplot(data_filtered, aes(x = pattw, fill = factor(outcome, levels = c(1, 0)), width = ifelse(pattw %in% c("word_AI", "word_human"), 1, 0.8))) +
+ggplot(data_filtered, aes(x = pattw, fill = factor(origen, levels = c(1, 0)), width = ifelse(pattw %in% c("word_AI", "word_human"), 1, 0.8))) +
   geom_bar(position = "dodge") +
   facet_wrap(~ pattw, ncol = 5, scales = "free_x") +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(x = "The 15 words with the highest frequency", y = "Frequency", fill = "Outcome") +
-  scale_fill_manual(values = c("#F8766D", "#00BFC4"), labels = c("AI", "Human")) +
+  labs(x = "Análisis bivariado de las palabras más frecuentes", y = "Frecuencia", fill = "Origen") +
+  scale_fill_manual(values = c("#F8766D", "#00BFC4"), labels = c("IA", "Humano")) +
   guides(fill = guide_legend(reverse = TRUE)) 
 ```
 
-**Outcome and Numeric Variables**
+**origen and Numeric Variables**
 
-*Outcome & Lengthl*
+*origen & Lengthl*
 
 ```{r}
-boxplot(data$lengthl ~ data$outcome, 
+boxplot(data$lengthl ~ data$origen, 
         main = "Boxplot Lengthl",
-        xlab = "outcome", ylab = "lengthl")
+        xlab = "origen", ylab = "lengthl")
 
-ttest1 <- t.test(data$lengthl ~ data$outcome)
+ttest1 <- t.test(data$lengthl ~ data$origen)
 print(ttest1)
 ```
 
-
-*Outcome & Lengthw*
+*origen & Lengthw*
 
 ```{r}
-boxplot(data$lengthw  ~ data$outcome, 
+boxplot(data$lengthw  ~ data$origen, 
         main = "Boxplot Lengthw",
-        xlab = "outcome", ylab = "lengthw")
+        xlab = "origen", ylab = "lengthw")
 
-ttest2 <- t.test(data$lengthw ~ data$outcome)
+ttest2 <- t.test(data$lengthw ~ data$origen)
 print(ttest2)
 ```
 
-
-*Outcome & pgf*
+*origen & pgf*
 
 ```{r}
-boxplot(data$pgf ~ data$outcome, 
+boxplot(data$pgf ~ data$origen, 
         main = "Boxplot Pgf",
-        xlab = "outcome", ylab = "pgf")
+        xlab = "origen", ylab = "pgf")
 
-ttest3 <- t.test(data$pgf ~ data$outcome)
+ttest3 <- t.test(data$pgf ~ data$origen)
 print(ttest3)
 ```
 
-
-*Outcome & Nstc*
+*origen & Nstc*
 
 ```{r}
-boxplot(data$nstc ~ data$outcome, 
+boxplot(data$nstc ~ data$origen, 
         main = "Boxplot Nstc",
-        xlab = "outcome", ylab = "nstc")
+        xlab = "origen", ylab = "nstc")
 
-ttest4 <- t.test(data$nstc ~ data$outcome)
+ttest4 <- t.test(data$nstc ~ data$origen)
 print(ttest4)
 ```
 
-
-*Outcome & Wordl*
+*origen & Wordl*
 
 ```{r}
-boxplot(data$wordl ~ data$outcome, 
+boxplot(data$wordl ~ data$origen, 
         main = "Boxplot Wordl",
-        xlab = "outcome", ylab = "wordl")
+        xlab = "origen", ylab = "wordl")
 
-ttest5 <- t.test(data$wordl ~ data$outcome)
+ttest5 <- t.test(data$wordl ~ data$origen)
 print(ttest5)
 ```
 
-*Outcome & Enum*
+*origen & Enum*
 
 ```{r}
-boxplot(data$enumeraciones_norm ~ data$outcome, 
+boxplot(data$enum ~ data$origen, 
         main = "Boxplot Enum",
-        xlab = "outcome", ylab = "Enum")
+        xlab = "origen", ylab = "Enum")
 
-ttest6 <- t.test(data$enumeraciones_norm ~ data$outcome)
+ttest6 <- t.test(data$enum ~ data$origen)
 print(ttest6)
 ```
 
-*Outcome & Sentm*
+*Origen & sentm*
 
 ```{r}
-boxplot(data$sent_mean ~ data$outcome, 
-        main = "Boxplot Sent_mean",
-        xlab = "outcome", ylab = "sentm")
+boxplot(data$sentm ~ data$origen, 
+        main = "Boxplot sentm",
+        xlab = "origen", ylab = "sentm")
 
-ttest7 <- t.test(data$sent_mean ~ data$outcome)
+ttest7 <- t.test(data$sentm ~ data$origen)
 print(ttest7)
 ```
 
-
-*Outcome & Sentsd*
+*Origen & Sent_sd*
 
 ```{r}
-boxplot(data$sent_sd ~ data$outcome, 
+boxplot(data$sentval ~ data$origen, 
         main = "Boxplot Sent_sd",
-        xlab = "outcome", ylab = "sentsd")
+        xlab = "origen", ylab = "sent_sd")
 
-ttest8 <- t.test(data$sent_sd ~ data$outcome)
+ttest8 <- t.test(data$sentval ~ data$origen)
 print(ttest8)
 ```
 
-
-*Outcome & Patt*
+*origen & Patt*
 
 ```{r}
-boxplot(data$patt ~ data$outcome, 
+boxplot(data$patt ~ data$origen, 
         main = "Boxplot Patt",
-        xlab = "outcome", ylab = "patt")
+        xlab = "origen", ylab = "patt")
 
-ttest9 <- t.test(data$patt ~ data$outcome)
+ttest9 <- t.test(data$patt ~ data$origen)
 print(ttest9)
 ```
 
-
-*Outcome & Pron*
+*origen & Pron*
 
 ```{r}
-boxplot(data$pron ~ data$outcome, 
+boxplot(data$pron ~ data$origen, 
         main = "Boxplot Pron",
-        xlab = "outcome", ylab = "pron")
+        xlab = "origen", ylab = "pron")
 
-ttest10 <- t.test(data$pron ~ data$outcome)
+ttest10 <- t.test(data$pron ~ data$origen)
 print(ttest10)
 ```
 
-
-*Outcome & Art*
+*origen & Art*
 
 ```{r}
-boxplot(data$art ~ data$outcome, 
+boxplot(data$art ~ data$origen, 
         main = "Boxplot Art",
-        xlab = "outcome", ylab = "art")
+        xlab = "origen", ylab = "art")
 
-ttest11 <- t.test(data$art ~ data$outcome)
+ttest11 <- t.test(data$art ~ data$origen)
 print(ttest11)
 ```
 
-
-*Outcome & Voc*
+*origen & Voc*
 
 ```{r}
-boxplot(data$voc ~ data$outcome, 
+boxplot(data$voc ~ data$origen, 
         main = "Boxplot Voc",
-        xlab = "outcome", ylab = "voc")
+        xlab = "origen", ylab = "voc")
 
-ttest12 <- t.test(data$voc ~ data$outcome)
+ttest12 <- t.test(data$voc ~ data$origen)
 print(ttest12)
 ```
 
-
-*Outcome & Form*
+*origen & Form*
 
 ```{r}
-boxplot(data$form ~ data$outcome, 
+boxplot(data$form ~ data$origen, 
         main = "Boxplot Form",
-        xlab = "outcome", ylab = "form")
+        xlab = "origen", ylab = "form")
 
-ttest13 <- t.test(data$form ~ data$outcome)
+ttest13 <- t.test(data$form ~ data$origen)
 print(ttest13)
 ```
 
-*Outcome & Aggr*
+*origen & Aggr*
 
 ```{r}
-boxplot(data$aggr ~ data$outcome, 
+boxplot(data$aggr ~ data$origen, 
         main = "Boxplot Aggr",
-        xlab = "outcome", ylab = "aggr")
+        xlab = "origen", ylab = "aggr")
 
-ttest14 <- t.test(data$aggr ~ data$outcome)
+ttest14 <- t.test(data$aggr ~ data$origen)
 print(ttest14)
 ```
 
-*Outcome & Avw*
+*origen & Conectores*
 
 ```{r}
-boxplot(data$avw ~ data$outcome, 
-        main = "Boxplot Avw",
-        xlab = "outcome", ylab = "avw")
+boxplot(data$conectores ~ data$origen, 
+        main = "Boxplot Conectores",
+        xlab = "origen", ylab = "conectores")
 
-ttest15 <- t.test(data$avw ~ data$outcome)
+ttest15 <- t.test(data$conectores ~ data$origen)
 print(ttest15)
 ```
 
-
-*Outcome & Spgf*
+*origen & Avw*
 
 ```{r}
-boxplot(data$spgf ~ data$outcome, 
-        main = "Boxplot Spgf",
-        xlab = "outcome", ylab = "spgf")
+boxplot(data$avw ~ data$origen, 
+        main = "Boxplot Avw",
+        xlab = "origen", ylab = "avw")
 
-ttest16 <- t.test(data$spgf ~ data$outcome)
+ttest16 <- t.test(data$avw ~ data$origen)
 print(ttest16)
 ```
 
-
-*Outcome & Wpgf*
+*origen & Spgf*
 
 ```{r}
-boxplot(data$wpgf ~ data$outcome, 
-        main = "Boxplot Wpgf",
-        xlab = "outcome", ylab = "wpgf")
+boxplot(data$spgf ~ data$origen, 
+        main = "Boxplot Spgf",
+        xlab = "origen", ylab = "spgf")
 
-ttest17 <- t.test(data$wpgf ~ data$outcome)
+ttest17 <- t.test(data$spgf ~ data$origen)
 print(ttest17)
 ```
 
-
-*Outcome & Nstcw*
+*origen & Wpgf*
 
 ```{r}
-boxplot(data$nstcw ~ data$outcome, 
-        main = "Boxplot Nstcw",
-        xlab = "outcome", ylab = "nstcw")
+boxplot(data$wpgf ~ data$origen, 
+        main = "Boxplot Wpgf",
+        xlab = "origen", ylab = "wpgf")
 
-ttest18 <- t.test(data$nstcw ~ data$outcome)
+ttest18 <- t.test(data$wpgf ~ data$origen)
 print(ttest18)
 ```
 
-
-*Outcome & Pgfw*
+*origen & Nstcw*
 
 ```{r}
-boxplot(data$pgfw ~ data$outcome, 
-        main = "Boxplot Pgfw",
-        xlab = "outcome", ylab = "pgfw")
+boxplot(data$nstcw ~ data$origen, 
+        main = "Boxplot Nstcw",
+        xlab = "origen", ylab = "nstcw")
 
-ttest19 <- t.test(data$pgfw ~ data$outcome)
+ttest19 <- t.test(data$nstcw ~ data$origen)
 print(ttest19)
 ```
 
-
-*Outcome & Freqv*
+*origen & Pgfw*
 
 ```{r}
-boxplot(data$freqv ~ data$outcome, 
-        main = "Boxplot Freqv",
-        xlab = "outcome", ylab = "freqv")
+boxplot(data$pgfw ~ data$origen, 
+        main = "Boxplot Pgfw",
+        xlab = "origen", ylab = "pgfw")
 
-ttest20 <- t.test(data$freqv ~ data$outcome)
+ttest20 <- t.test(data$pgfw ~ data$origen)
 print(ttest20)
 ```
 
-
-*Outcome & Typew*
+*origen & Freqv*
 
 ```{r}
-boxplot(data$typew ~ data$outcome, 
-        main = "Boxplot Typew",
-        xlab = "outcome", ylab = "typew")
+boxplot(data$freqv ~ data$origen, 
+        main = "Boxplot Freqv",
+        xlab = "origen", ylab = "freqv")
 
-ttest21 <- t.test(data$typew ~ data$outcome)
+ttest21 <- t.test(data$freqv ~ data$origen)
 print(ttest21)
 ```
 
-
-*Outcome & Sumrep*
+*origen & Typew*
 
 ```{r}
-boxplot(data$sumrep ~ data$outcome, 
-        main = "Boxplot Sumrep",
-        xlab = "outcome", ylab = "sumrep")
+boxplot(data$typew ~ data$origen, 
+        main = "Boxplot Typew",
+        xlab = "origen", ylab = "typew")
 
-ttest22 <- t.test(data$sumrep ~ data$outcome)
+ttest22 <- t.test(data$typew ~ data$origen)
 print(ttest22)
 ```
 
-
-*Outcome & And*
+*origen & Sumrep*
 
 ```{r}
-boxplot(data$y ~ data$outcome, 
-        main = "Boxplot y",
-        xlab = "outcome", ylab = "y")
+boxplot(data$sumrep ~ data$origen, 
+        main = "Boxplot Sumrep",
+        xlab = "origen", ylab = "sumrep")
 
-ttest23 <- t.test(data$y ~ data$outcome)
+ttest23 <- t.test(data$sumrep ~ data$origen)
 print(ttest23)
 ```
 
-
-*Outcome & The*
+*origen & Signos_exp*
 
 ```{r}
-boxplot(data$articulos ~ data$outcome, 
-        main = "Boxplot El",
-        xlab = "outcome", ylab = "El")
+boxplot(data$signos_exp ~ data$origen, 
+        main = "Boxplot de diálogo/expresividad",
+        xlab = "origen",
+        ylab = "dialogo",
+        col = c("skyblue", "lightgreen"))
 
-ttest24 <- t.test(data$articulos ~ data$outcome)
+ttest24 <- t.test(data$signos_exp ~ data$origen)
 print(ttest24)
 ```
 
-and
+*origen & Que*
 
 ```{r}
-data$y <- sapply(texts, function(x) str_count(x, pattern = "\\b(y)\\b"))
-data$y <- data$y / data$lengthw
+boxplot(data$que ~ data$origen, 
+        main = "Boxplot que",
+        xlab = "origen", ylab = "que")
+
+ttest25 <- t.test(data$que ~ data$origen)
+print(ttest25)
 ```
 
-the
+*origen & La*
 
 ```{r}
-data$articulos <- sapply(texts, function(x) str_count(x, pattern = "\\b(el|la|los|las)\\b"))
-data$articulos <- data$articulos / data$lengthw
+boxplot(data$la ~ data$origen, 
+        main = "Boxplot La",
+        xlab = "origen", ylab = "La")
+
+ttest26 <- t.test(data$la ~ data$origen)
+print(ttest26)
+```
+
+*origen & FleschSzigriszt*
+
+```{r}
+boxplot(data$flesch ~ data$origen, 
+        main = "Boxplot flesch",
+        xlab = "origen", ylab = "Índice")
+
+ttest27 <- t.test(data$flesch ~ data$origen)
+print(ttest27)
+```
+
+que
+
+```{r}
+data$que <- sapply(texts, function(x) str_count(x, pattern = "\\b(que)\\b"))
+data$que <- data$que / data$lengthw
+```
+
+la
+
+```{r}
+data$la <- sapply(texts, function(x) str_count(x, pattern = "\\b(la)\\b"))
+data$la <- data$la / data$lengthw
 ```
 
 ```{r}
@@ -1116,22 +1197,20 @@ library(caret)
 
 ```{r}
 library(dplyr)
-data <- select(data, -c(id, source, year, sent, lengthw, pgf, nstc))
+data <- select(data, -c(id, fuente, anio, lengthl, lengthw, pgf, nstc, enumeraciones, silabas, sentval))
 ```
 
-# Classification Tree
+# Árbol de decisión
 
 ```{r}
 set.seed(1649)
 suppressMessages(library(caret))
 
-data.tree = rpart(outcome ~ ., 
+data.tree = rpart(origen ~ ., 
                   data=data, 
                   method="class")
 
 data.tree
-# class(data.tree$finalModel)
-# summary(data.tree$finalModel)
 ```
 
 ```{r}
@@ -1146,7 +1225,6 @@ summary(data.tree)       # Más detalles del modelo
 print(data.tree$bestTune) # Muestra los mejores parámetros
 ```
 
-cp = 0.08506114
 
 ```{r}
 set.seed(1649)
@@ -1157,7 +1235,7 @@ tuneGrid <- expand.grid(cp = seq(0.001, 0.1, length.out = 100))
 # Configuración de validación cruzada; en este ejemplo se usan 10 folds
 ctrl <- trainControl(method = "cv", number = 10)
 
-data.tree1 <- train(outcome ~ ., 
+data.tree1 <- train(origen ~ ., 
                    data = data, 
                    method = "rpart", 
                    trControl = ctrl, 
@@ -1171,7 +1249,7 @@ rpart.plot(data.tree1$finalModel, uniform = TRUE, main = "Árbol de Decisión Op
 ```{r}
 predictions <- predict(data.tree1, newdata = data)
 
-cm <- confusionMatrix(predictions, data$outcome)
+cm <- confusionMatrix(predictions, data$origen)
 kappa <- cm$overall['Kappa']
 print(kappa)
 
@@ -1181,7 +1259,7 @@ library(pROC)
 
 pred1 <- predict(data.tree1, newdata = data, type = "prob")[, 2]
 
-roc_obj1 <- roc(data$outcome, pred1)
+roc_obj1 <- roc(data$origen, pred1)
 
 auc1 <- auc(roc_obj1)
 print(auc1)
@@ -1197,22 +1275,22 @@ cm1
 34.4 / (34.4 + 15.6) # recall
 ```
 
-cp = 0.038
+cp = 0.04
 
 ```{r}
 set.seed(1649)
 suppressMessages(library(caret))
-data.tree2 <- train(outcome ~ ., 
+data.tree2 <- train(origen ~ ., 
                    data = data, 
                    method = "rpart", 
                    trControl = trainControl(method = "cv"), 
-                   tuneGrid = data.frame(cp = 0.038))
+                   tuneGrid = data.frame(cp = 0.04))
 
 rpart.plot(data.tree2$finalModel, uniform=TRUE,
-           main="Classification Tree with cp = 0.038")
+           main="Classification Tree with cp = 0.04")
 ```
 
-# Random Forest 
+# Bosque Aleatorio
 
 ```{r}
 set.seed(1649)
@@ -1223,7 +1301,7 @@ ctrl <- trainControl(method = "repeatedcv",
                      number = 5, 
                      repeats = 10)
 
-rf_model <- train(outcome ~ ., 
+rf_model <- train(origen ~ ., 
                   data = data, 
                   method = "rf", 
                   trControl = ctrl, 
@@ -1233,6 +1311,7 @@ print(rf_model)
 class(rf_model$finalModel)
 varImp(rf_model)
 ```
+
 ```{r}
 ImpData <- varImp(rf_model)$importance
 ```
@@ -1269,7 +1348,7 @@ predictions <- predict(rf_model, newdata = data)
 probabilities <- predict(rf_model, newdata = data, type = "prob")
 
 library(pROC)
-roc_obj2 <- roc(data$outcome, probabilities[, "1"])
+roc_obj2 <- roc(data$origen, probabilities[, "1"])
 auc <- auc(roc_obj2)
 
 print(auc)
@@ -1283,17 +1362,18 @@ confusionMatrix(rf_model)
 38.4 / (38.4 + 5.6) # ppv
 38.4 / (38.4 + 11.6) # recall
 ```
+
 # Logistic Model
 
 ```{r}
 data$sumrep_100 <- 100 * data$sumrep
-data$y_100 = 100 * data$y
+data$que_100 = 100 * data$que
 ```
 
 ```{r}
 library(caret)
 model = train(
-  form = outcome ~ sumrep_100 + wpgf + y_100 + typo + freqv,
+  form = origen ~ sumrep_100 + wpgf + que_100 + categoria + freqv,
   data = data,
   trControl = trainControl(method = "cv", number = 5),
   method = "glm",
@@ -1305,13 +1385,13 @@ summary(model)
 
 ```{r}
 predicts <- predict(model, newdata = data)
-cm <- confusionMatrix(predicts, data$outcome)
+cm <- confusionMatrix(predicts, data$origen)
 cm$overall["Kappa"]
 ```
 
 ```{r}
 probs <- predict(model, newdata = data, type = "prob")[, 2]
-roc(data$outcome, probs)$auc
+roc(data$origen, probs)$auc
 ```
 
 ```{r}
@@ -1328,7 +1408,7 @@ set.seed(1649)
 
 probabilities <- predict(model, newdata = data, type = "prob")
 
-roc <- roc(data$outcome, probabilities[, "1"])
+roc <- roc(data$origen, probabilities[, "1"])
 
 plot(roc, main = "Logistic model ROC curve")
 ```
@@ -1347,11 +1427,11 @@ num.supp.vect2 = 0:M
 cq=seq(1,100, M+1)
 
 for(i in 1:length(cq)){
-svm.model = svm(outcome ~ ., data = data, kernel = "linear", cost = cq[i], scale = T, probability = T)
+svm.model = svm(origen ~ ., data = data, kernel = "linear", cost = cq[i], scale = T, probability = T)
 
 svm.pred <- predict(svm.model, newdata = data[,-1])
 
-t2<-table(svm.pred, data$outcome)
+t2<-table(svm.pred, data$origen)
 n<-nrow(data)
 accuracy.vector2[i] <- (sum(diag(t2))/n)
 num.supp.vect2[i] = svm.model$tot.nSV
@@ -1379,9 +1459,9 @@ test <- data[!train.sel,]
 
 ```{r}
 set.seed(1649)
-svm_2 = svm(outcome ~ ., data = train, kernel = "linear", cost = 41, scale = TRUE, probability=TRUE)
+svm_2 = svm(origen ~ ., data = train, kernel = "linear", cost = 76, scale = TRUE, probability=TRUE)
 
-confusionMatrix(predict(svm_2, newdata = test[,-1]),test$outcome) 
+confusionMatrix(predict(svm_2, newdata = test[,-1]),test$origen) 
 ```
 
 ```{r}
@@ -1395,7 +1475,7 @@ library(pROC)
 PRED <- predict(svm_2, newdata = test[,-1],probability = TRUE)
 # head(attr(PRED, "probabilities"))
 pred <- attr(PRED, "probabilities")[,2]
-roc2 <- roc(test$outcome,pred)
+roc2 <- roc(test$origen,pred)
 ```
 
 ```{r}
@@ -1411,11 +1491,11 @@ num.supp.vect3 = matrix(0, M+1, M+1)
 
 for(i in 0:M){
   for(j in 0:M){
-svm.model2 = svm(outcome ~ ., data = data, kernel = "radial", cost = 10^i, gamma=10^(-j))
+svm.model2 = svm(origen ~ ., data = data, kernel = "radial", cost = 10^i, gamma=10^(-j))
 
 svm.pred2 <- predict(svm.model2, newdata = data[,-1])
 
-t3<-table(svm.pred2, data$outcome)
+t3<-table(svm.pred2, data$origen)
 n2<-nrow(data)
 accuracy.vector3[i+1, j+1] <- (sum(diag(t3))/n)
 num.supp.vect3[i+1, j+1] = svm.model$tot.nSV
@@ -1448,9 +1528,9 @@ test <- data[!train.sel,]
 
 ```{r}
 set.seed(1649)
-svm_3 = svm(outcome ~ ., data = train, kernel = "radial", cost = 1, gamma = 1, scale = TRUE, probability=TRUE)
+svm_3 = svm(origen ~ ., data = train, kernel = "radial", cost = 1, gamma = 1, scale = TRUE, probability=TRUE)
 
-confusionMatrix(predict(svm_3, newdata = test[,-1]),test$outcome) 
+confusionMatrix(predict(svm_3, newdata = test[,-1]),test$origen) 
 ```
 
 ```{r}
@@ -1464,17 +1544,24 @@ library(pROC)
 PRED2 <- predict(svm_3, newdata = test[,-1],probability = TRUE)
 # head(attr(PRED, "probabilities"))
 pred2 <- attr(PRED2, "probabilities")[,2]
-roc3 <- roc(test$outcome,pred2)
+roc3 <- roc(test$origen,pred2)
 ```
 
 ```{r}
 plot(roc3, main = "radial SVM ROC curve")
 ```
 
-
-
 ```{r}
 plot(roc2, main = "Linear SVM vs Radial SVM ROC curves")
 plot(roc3, add = TRUE, col = "steelblue")
 legend("bottomright", legend = c("Linear SVM", "Radial SVM"), col = c("black", "steelblue"), lty = 1)
+```
+```{r}
+library(ggplot2)
+library(plotly)
+p <- ggplot(data, aes(x = ADJ_prop, fill = factor(origen))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Distribución de adjetivos", fill = "Origen")
+
+ggplotly(p)
 ```
